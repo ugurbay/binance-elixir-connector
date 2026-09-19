@@ -9,3 +9,4 @@ erl_crash.dump
 .env.*
 /.testnet-order-journal/
 /.reference/
+/.hex-publish-key

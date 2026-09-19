@@ -4,17 +4,19 @@ defmodule BinanceElixir.MixProject do
   def project do
     [
       app: :binance_elixir,
-      version: "0.2.0",
+      version: "0.2.1",
       source_url: "https://github.com/ugurbay/binance-elixir-connector",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: "Unofficial Binance Spot REST and WebSocket connector for Elixir",
+      docs: [main: "readme", extras: ["README.md"]],
       package: [
         licenses: ["MIT"],
         links: %{
           "GitHub" => "https://github.com/ugurbay/binance-elixir-connector",
-          "Binance Spot API" => "https://developers.binance.com/en/docs/products/spot/rest-api"
+          "Binance Spot API" =>
+            "https://developers.binance.com/en/docs/binance-spot-api-docs/rest-api"
         },
         files: ["lib", "mix.exs", "README.md", "CHANGELOG.md", "LICENSE", ".formatter.exs"]
       ]

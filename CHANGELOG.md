@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Prepared the Hex.pm release, updated installation instructions and package documentation metadata.
+
 ## 0.2.0
 
 - Default REST host is now Spot testnet. Production writes require an explicit opt-in.

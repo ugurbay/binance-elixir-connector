@@ -4,13 +4,13 @@ Unofficial Binance **Spot** connector for Elixir and Phoenix: public and signed 
 
 ## Install
 
-Requires Elixir 1.15 or newer. Once the `v0.2.0` tag is published, add to `mix.exs`:
+Requires Elixir 1.15 or newer. Add to your application's `mix.exs`:
 
 ```elixir
-{:binance_elixir, git: "https://github.com/ugurbay/binance-elixir-connector.git", tag: "v0.2.0"}
+{:binance_elixir, "~> 0.2.1"}
 ```
 
-For local development, use `{:binance_elixir, path: "../binance-elixir-connector"}`. Run `mix deps.get` and `mix test` here. The package has not been published to Hex.pm.
+For local development, use `{:binance_elixir, path: "../binance-elixir-connector"}`. Run `mix deps.get` and `mix test` here.
 
 ## REST and order safety
 
