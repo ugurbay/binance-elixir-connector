@@ -1,0 +1,10 @@
+/_build/
+/deps/
+/.elixir_ls/
+/cover/
+/doc/
+erl_crash.dump
+/*.tar
+.env
+.env.*
+!.env.example
