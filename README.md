@@ -81,6 +81,12 @@ Retries and backoff are per request. Applications with concurrent workers need a
 
 This first release covers Spot REST with HMAC API keys and public Spot market WebSocket streams. Signed user events, WebSocket API, Futures, and RSA/Ed25519 signing are outside its current API.
 
+## Live Spot testnet check
+
+Run `mix run scripts/smoke_testnet.exs` to check testnet REST connectivity, server time, BTCUSDT exchange information, order book, ticker price, and a live trade WebSocket event. For signed checks, create a local `.env.testnet` or `.env` file with `BINANCE_TESTNET_API_KEY=...` and `BINANCE_TESTNET_API_SECRET=...`, or set those environment variables. Both local files are ignored by Git. The script then checks a signed account read and `/api/v3/order/test`. The test-order endpoint validates a sample order without executing it. The script reports signed checks as skipped when credentials are unavailable; it never prints credentials or account balances.
+
+Run `mix run scripts/smoke_testnet_order.exs` with testnet credentials to place a BTCUSDT limit order, query it by its client order ID, cancel it, and verify the final status. The script uses the fixed Spot testnet URL, computes price and quantity from current symbol filters, caps the order at 100 virtual USDT, and records its client order ID in the Git-ignored `.testnet-order-journal` directory before submission. It removes the journal entry only after confirming cancellation. If the check fails, inspect and reconcile the recorded testnet order before rerunning it.
+
 ## Sources
 
 - [Binance Spot REST API](https://developers.binance.com/en/docs/products/spot/rest-api)

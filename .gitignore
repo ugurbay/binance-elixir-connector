@@ -7,4 +7,4 @@ erl_crash.dump
 /*.tar
 .env
 .env.*
-!.env.example
+/.testnet-order-journal/
