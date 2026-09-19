@@ -2,7 +2,7 @@
 
 An **unofficial** Elixir connector for **Binance Spot REST and public market WebSocket streams**. It provides a small, reusable HTTP core and common market, account, and order endpoints. Responses preserve Binance rate-limit headers and API error codes. A custom transport can be injected for tests or an application's own HTTP stack.
 
-This is an early Spot connector release. It has unit tests and a live public REST `ping` check, but signed testnet requests and live order reconciliation have not yet been verified with account credentials. Do not treat this release as a production trading risk control.
+This is an early Spot connector release. Unit tests, public and signed Spot testnet requests, a live public market WebSocket event, and a testnet limit-order create/query/cancel cycle have passed. The connector does not yet automate unknown-order reconciliation or cover signed account WebSocket events. Do not treat this release as a production trading risk control.
 
 ## Install and run
 
@@ -75,7 +75,7 @@ IO.inspect(MarketStream.stats(stream))
 
 Run this process under your Phoenix application's supervisor. Check `stats(stream).dropped` and `stats(stream).reconnects`; either increase means derived market state may be incomplete and must be rebuilt from REST snapshots. A depth stream alone is not a synchronized local order book, and `dropped: 0` does not prove that no events were lost on the network. The current stream set is fixed for each connection; stop and start a new process to change it. User Data Stream and WebSocket API are not included yet.
 
-The client retries **GET only**, with exponential backoff and Binance's `Retry-After` header. It never retries order writes. Configure `retries`, `backoff_ms`, `timeout`, `recv_window`, and `base_url` with `BinanceElixir.new/1`. Use `base_url: "https://testnet.binance.vision"` for Spot testnet. The HTTP transport verifies TLS certificates and does not follow redirects. API keys are hidden when inspecting the client struct. Store credentials in environment variables or a secret manager, never in source code.
+The client retries **GET only**, with exponential backoff and Binance's `Retry-After` header. It never retries order writes. Configure `retries`, `backoff_ms`, `timeout`, `recv_window`, and `base_url` with `BinanceElixir.new/1`. The default REST URL is **production**; set `base_url: "https://testnet.binance.vision"` explicitly for Spot testnet. The HTTP transport verifies TLS certificates and does not follow redirects. API keys are hidden when inspecting the client struct. Store credentials in environment variables or a secret manager, never in source code.
 
 Retries and backoff are per request. Applications with concurrent workers need a shared rate-limit budget and a durable order state machine before live trading. Clock synchronization, WebSocket account events, and exchange filter validation are also the application's responsibility in this version.
 
