@@ -30,6 +30,11 @@ defmodule BinanceElixir.Spot.MarketStream.Socket do
   @impl true
   def handle_cast(:renew, state), do: {:close, state}
 
+  def handle_cast({:control, method, streams, id}, state) do
+    payload = Jason.encode!(%{method: method, params: streams, id: id})
+    {:reply, {:text, payload}, state}
+  end
+
   @impl true
   def handle_info(:renew, state), do: {:close, state}
   def handle_info(_message, state), do: {:ok, state}

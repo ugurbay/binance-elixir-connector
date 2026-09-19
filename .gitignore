@@ -8,3 +8,4 @@ erl_crash.dump
 .env
 .env.*
 /.testnet-order-journal/
+/.reference/

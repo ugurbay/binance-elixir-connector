@@ -55,11 +55,6 @@ defmodule TestnetOrderSmoke do
     File.mkdir_p!(journal_dir)
     journal = Path.join(journal_dir, id <> ".json")
 
-    File.write!(
-      journal,
-      Jason.encode!(%{environment: "spot_testnet", symbol: "BTCUSDT", client_order_id: id})
-    )
-
     params = %{
       symbol: "BTCUSDT",
       side: "BUY",
@@ -70,23 +65,34 @@ defmodule TestnetOrderSmoke do
       newClientOrderId: id
     }
 
-    placed = Spot.place_order(client, params)
+    persist = fn _record ->
+      File.write(
+        journal,
+        Jason.encode!(%{environment: "spot_testnet", symbol: "BTCUSDT", client_order_id: id})
+      )
+    end
+
+    placed = Spot.submit_order(client, symbol, params, persist: persist)
     queried = Spot.order(client, %{symbol: "BTCUSDT", origClientOrderId: id})
     canceled = Spot.cancel_order(client, %{symbol: "BTCUSDT", origClientOrderId: id})
     final = Spot.order(client, %{symbol: "BTCUSDT", origClientOrderId: id})
 
     case {placed, queried, canceled, final} do
-      {{:ok, %{data: %{"clientOrderId" => ^id}}},
+      {{:ok, %{state: state, order: %{"clientOrderId" => ^id}}},
        {:ok, %{data: %{"clientOrderId" => ^id}}},
        {:ok, %{data: %{"status" => "CANCELED"}}},
-       {:ok, %{data: %{"status" => "CANCELED"}}}} ->
+       {:ok, %{data: %{"status" => "CANCELED"}}}}
+      when state in [:confirmed, :reconciled] ->
         File.rm!(journal)
         IO.puts("PASS testnet order create, query, cancel, and verify")
+        id
 
       results ->
         summary =
           Enum.map_join(Tuple.to_list(results), ", ", fn
             {:ok, %{data: data}} -> "ok:#{data["status"]}"
+            {:ok, %{state: state}} -> "ok:#{state}"
+            {:error, %{state: state}} -> "error:#{state}"
             {:error, error} -> "error:#{error.status}/#{error.code}/#{error.message}"
           end)
 

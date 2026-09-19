@@ -3,6 +3,15 @@ defmodule BinanceElixir.Spot do
 
   alias BinanceElixir, as: Client
   alias BinanceElixir.Error
+  alias BinanceElixir.Spot.{Filters, Reconciliation}
+
+  @doc "Locally validates an order against exchangeInfo symbol filters."
+  def validate_order(symbol_info, params, opts \\ []),
+    do: Filters.validate(symbol_info, params, opts)
+
+  @doc "Durably reserves, submits once, and queries uncertain order outcomes."
+  def submit_order(client, symbol_info, params, opts \\ []),
+    do: Reconciliation.submit(client, symbol_info, params, opts)
 
   @spec ping(Client.t()) :: {:ok, BinanceElixir.Response.t()} | {:error, Error.t()}
   def ping(client), do: Client.request(client, :get, "/api/v3/ping")
@@ -41,10 +50,28 @@ defmodule BinanceElixir.Spot do
   def ticker_price(client, params \\ %{}),
     do: Client.request(client, :get, "/api/v3/ticker/price", params)
 
+  @spec ticker_24h(Client.t(), map() | keyword()) ::
+          {:ok, BinanceElixir.Response.t()} | {:error, Error.t()}
+  def ticker_24h(client, params \\ %{}),
+    do: Client.request(client, :get, "/api/v3/ticker/24hr", params)
+
+  @spec book_ticker(Client.t(), map() | keyword()) ::
+          {:ok, BinanceElixir.Response.t()} | {:error, Error.t()}
+  def book_ticker(client, params \\ %{}),
+    do: Client.request(client, :get, "/api/v3/ticker/bookTicker", params)
+
   @spec account(Client.t(), map() | keyword()) ::
           {:ok, BinanceElixir.Response.t()} | {:error, Error.t()}
   def account(client, params \\ %{}),
     do: Client.request(client, :get, "/api/v3/account", params, security: :signed)
+
+  @spec my_trades(Client.t(), String.t(), map() | keyword()) ::
+          {:ok, BinanceElixir.Response.t()} | {:error, Error.t()}
+  def my_trades(client, symbol, params \\ %{}),
+    do:
+      Client.request(client, :get, "/api/v3/myTrades", merge(params, symbol: symbol),
+        security: :signed
+      )
 
   @spec open_orders(Client.t(), map() | keyword()) ::
           {:ok, BinanceElixir.Response.t()} | {:error, Error.t()}

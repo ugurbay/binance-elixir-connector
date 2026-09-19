@@ -1,8 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-- Added repeatable live Spot testnet checks for public and signed REST, market WebSocket, and a bounded limit-order create/query/cancel cycle. These checks passed with testnet credentials; GitHub CI also passed.
+- Default REST host is now Spot testnet. Production writes require an explicit opt-in.
+- Added exact decimal order filter preflight and single submission with bounded reconciliation by durable client order ID.
+- Added signed User Data Stream via WebSocket API, normalized events, and dynamic public market subscriptions.
+- Added Ed25519 signing alongside HMAC, midpoint server time synchronization, and shared rate limit observations.
+- Expanded Spot REST endpoint helpers and testnet acceptance scripts.
 
 ## 0.1.0
 

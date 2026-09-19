@@ -37,7 +37,10 @@ defmodule BinanceElixir.Params do
   end
 
   defp pair(key, value),
-    do: URI.encode_www_form(to_string(key)) <> "=" <> URI.encode_www_form(value)
+    do:
+      URI.encode(to_string(key), &URI.char_unreserved?/1) <>
+        "=" <>
+        URI.encode(value, &URI.char_unreserved?/1)
 
   defp value_to_string(nil), do: {:ok, nil}
   defp value_to_string(true), do: {:ok, "true"}
@@ -45,6 +48,14 @@ defmodule BinanceElixir.Params do
   defp value_to_string(value) when is_binary(value), do: {:ok, value}
   defp value_to_string(value) when is_atom(value), do: {:ok, Atom.to_string(value)}
   defp value_to_string(value) when is_integer(value), do: {:ok, Integer.to_string(value)}
+
+  defp value_to_string(%Decimal{} = value) do
+    plain = Decimal.to_string(value, :normal)
+
+    if byte_size(plain) <= 64 and Regex.match?(~r/\A-?\d+(?:\.\d+)?\z/, plain),
+      do: {:ok, plain},
+      else: {:error, "Decimal must be finite and plain"}
+  end
 
   defp value_to_string(_),
     do:

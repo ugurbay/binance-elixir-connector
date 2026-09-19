@@ -7,27 +7,31 @@ defmodule BinanceElixir do
   Binance may have executed an order even though its result is unknown.
   """
 
-  alias BinanceElixir.{Error, Params, Response}
+  alias BinanceElixir.{Error, Params, RateLimit, Response, Signature}
 
-  @default_base_url "https://api.binance.com"
+  @default_base_url "https://testnet.binance.vision"
   @allowed_methods [:get, :post, :put, :delete]
   @allowed_security [:none, :api_key, :signed]
 
-  @derive {Inspect, except: [:api_key, :api_secret]}
+  @derive {Inspect, except: [:api_key, :api_secret, :private_key]}
   defstruct base_url: @default_base_url,
             api_key: nil,
             api_secret: nil,
+            signing_algorithm: :hmac,
+            private_key: nil,
+            enable_live_trading?: false,
             recv_window: 5_000,
             timeout: 10_000,
             retries: 2,
             backoff_ms: 250,
             transport: BinanceElixir.Transport.Httpc,
+            rate_tracker: nil,
             clock: nil,
             sleep: &Process.sleep/1
 
   @type t :: %__MODULE__{}
 
-  @doc "Creates a client. Set `base_url` to Binance Spot testnet for integration testing."
+  @doc "Creates a client. The default REST host is Binance Spot testnet."
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
     client = struct!(__MODULE__, opts)
@@ -49,6 +53,19 @@ defmodule BinanceElixir do
       raise ArgumentError, "timeout, retries, and backoff_ms must be non-negative integers"
     end
 
+    unless is_boolean(client.enable_live_trading?) do
+      raise ArgumentError, "enable_live_trading? must be a boolean"
+    end
+
+    unless client.signing_algorithm in [:hmac, :ed25519] do
+      raise ArgumentError, "signing_algorithm must be :hmac or :ed25519"
+    end
+
+    if client.signing_algorithm == :ed25519 and
+         Signature.seed(client.private_key) == {:error, :invalid_private_key} do
+      raise ArgumentError, "private_key must be unencrypted Ed25519 PKCS#8 PEM"
+    end
+
     %{
       client
       | base_url: String.trim_trailing(client.base_url, "/"),
@@ -58,7 +75,7 @@ defmodule BinanceElixir do
 
   @doc """
   Sends a Spot REST request. `security` is `:none`, `:api_key`, or `:signed`.
-  Signed requests use HMAC SHA-256 and a millisecond timestamp.
+  Signed requests use the configured HMAC SHA-256 or Ed25519 key and a millisecond timestamp.
   """
   @spec request(t(), atom(), String.t(), map() | keyword(), keyword()) ::
           {:ok, Response.t()} | {:error, Error.t()}
@@ -72,6 +89,10 @@ defmodule BinanceElixir do
       security not in @allowed_security ->
         invalid("unsupported security type")
 
+      method in [:post, :put, :delete] and not client.enable_live_trading? and
+          not testnet?(client.base_url) ->
+        invalid("production writes require enable_live_trading?: true")
+
       not (is_binary(path) and String.starts_with?(path, "/") and
              not String.starts_with?(path, "//") and not String.contains?(path, ["?", "#"])) ->
         invalid("path must be an absolute API path without query or fragment")
@@ -79,8 +100,11 @@ defmodule BinanceElixir do
       security != :none and blank?(client.api_key) ->
         invalid("api_key is required")
 
-      security == :signed and blank?(client.api_secret) ->
+      security == :signed and client.signing_algorithm == :hmac and blank?(client.api_secret) ->
         invalid("api_secret is required")
+
+      security == :signed and client.signing_algorithm == :ed25519 and blank?(client.private_key) ->
+        invalid("private_key is required")
 
       true ->
         do_request(client, method, path, params, security, client.retries)
@@ -97,10 +121,10 @@ defmodule BinanceElixir do
            Params.encode(
              pairs ++ [{"recvWindow", client.recv_window}, {"timestamp", client.clock.()}]
            ) do
-      signature =
-        :crypto.mac(:hmac, :sha256, client.api_secret, query) |> Base.encode16(case: :lower)
+      signature = Signature.sign(client, query)
+      {:ok, encoded_signature} = Params.encode(%{signature: signature})
 
-      {:ok, query <> "&signature=" <> signature}
+      {:ok, query <> "&" <> encoded_signature}
     else
       true -> {:error, "signature, timestamp, and recvWindow are managed by the client"}
       error -> error
@@ -141,14 +165,20 @@ defmodule BinanceElixir do
   end
 
   defp send_request(client, method, path, params, security, remaining, url, headers) do
+    if client.rate_tracker,
+      do: RateLimit.record_attempt(client.rate_tracker, estimate_weight(method, path, params))
+
     case client.transport.request(method, url, headers, "", client.timeout) do
       {:ok, status, response_headers, body} ->
+        if client.rate_tracker,
+          do: RateLimit.record_response(client.rate_tracker, response_headers)
+
         parsed_headers =
           Map.new(response_headers, fn {k, v} -> {String.downcase(to_string(k)), to_string(v)} end)
 
         result = decode_response(status, parsed_headers, body, method)
 
-        if method == :get and remaining > 0 and retryable?(status) do
+        if method == :get and remaining > 0 and retryable?(status, parsed_headers) do
           client.sleep.(
             retry_delay(parsed_headers, client.backoff_ms, client.retries - remaining)
           )
@@ -213,13 +243,14 @@ defmodule BinanceElixir do
            retry_after: retry_after(headers),
            unknown_execution?:
              method != :get and
-               (status >= 500 or status == 409 or code == -1007 or
+               (status >= 500 or status == 409 or code in [-1006, -1007] or
                   (status >= 200 and status < 300))
          }}
     end
   end
 
-  defp retryable?(status), do: status == 429 or status >= 500
+  defp retryable?(429, headers), do: is_integer(retry_after(headers))
+  defp retryable?(status, _headers), do: status >= 500
 
   defp retry_delay(headers, base, attempt) do
     case retry_after(headers) do
@@ -238,5 +269,76 @@ defmodule BinanceElixir do
   end
 
   defp blank?(value), do: not (is_binary(value) and byte_size(value) > 0)
+
+  defp testnet?(url),
+    do: URI.parse(url).host in ["testnet.binance.vision", "api1.testnet.binance.vision"]
+
+  defp estimate_weight(method, path, params) do
+    limit =
+      case Integer.parse(to_string(param(params, "limit") || "")) do
+        {value, ""} when value > 0 -> value
+        _ -> nil
+      end
+
+    case path do
+      "/api/v3/ping" ->
+        1
+
+      "/api/v3/time" ->
+        1
+
+      "/api/v3/exchangeInfo" ->
+        20
+
+      "/api/v3/depth" ->
+        cond do
+          is_nil(limit) -> 5
+          limit <= 100 -> 5
+          limit <= 500 -> 25
+          limit <= 1_000 -> 50
+          true -> 250
+        end
+
+      "/api/v3/klines" ->
+        2
+
+      "/api/v3/ticker/price" ->
+        if(param(params, "symbol"), do: 2, else: 4)
+
+      "/api/v3/ticker/bookTicker" ->
+        if(param(params, "symbol"), do: 2, else: 4)
+
+      "/api/v3/ticker/24hr" ->
+        if(param(params, "symbol"), do: 2, else: 80)
+
+      "/api/v3/account" ->
+        20
+
+      "/api/v3/myTrades" ->
+        if(param(params, "orderId"), do: 5, else: 20)
+
+      "/api/v3/openOrders" ->
+        if(param(params, "symbol"), do: 6, else: 80)
+
+      "/api/v3/order" ->
+        if(method == :get, do: 4, else: 1)
+
+      _ ->
+        0
+    end
+  rescue
+    _ -> 0
+  end
+
+  defp param(params, name) when is_map(params),
+    do:
+      Map.get(params, name) ||
+        Enum.find_value(params, fn {key, value} -> if to_string(key) == name, do: value end)
+
+  defp param(params, name) when is_list(params),
+    do: Enum.find_value(params, fn {key, value} -> if to_string(key) == name, do: value end)
+
+  defp param(_, _), do: nil
+
   defp invalid(message), do: {:error, %Error{type: :validation, message: message}}
 end

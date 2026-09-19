@@ -59,7 +59,7 @@ defmodule BinanceElixirTest do
 
     assert_receive {:request, :post, url, _, "", _}
     assert url =~ "quantity=0.00001000"
-    assert url =~ "newClientOrderId=a+b"
+    assert url =~ "newClientOrderId=a%20b"
   end
 
   test "GET retries after a rate limit response" do

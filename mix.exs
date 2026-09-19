@@ -4,12 +4,12 @@ defmodule BinanceElixir.MixProject do
   def project do
     [
       app: :binance_elixir,
-      version: "0.1.0",
+      version: "0.2.0",
       source_url: "https://github.com/ugurbay/binance-elixir-connector",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "Unofficial Binance Spot REST and market WebSocket connector for Elixir",
+      description: "Unofficial Binance Spot REST and WebSocket connector for Elixir",
       package: [
         licenses: ["MIT"],
         links: %{
@@ -28,6 +28,7 @@ defmodule BinanceElixir.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      {:decimal, "~> 3.1"},
       {:websockex, "~> 0.5.1"},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false}
     ]
